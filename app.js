@@ -7,7 +7,7 @@
    ============================================================ */
 
 const LIFF_ID = "2010312230-xUsYz0UB"; // 
-const PARTNERS_ENDPOINT = "https://script.google.com/macros/s/AKfycbw589kkA1HuCQBDu6giyS8TMeeZDj_EDWFUFBHpXnHvbdiymyedFq3kJZEoB9dpnPFWoA/exec"; 
+const PARTNERS_ENDPOINT = "https://script.google.com/macros/s/AKfycbzqT-qmVRh_jI04stlgYiWCypqWHjWkGv-0pNGkpvUt3c8FGQzQG_FBF7eWeb3frcDk/exec"; 
 const PENDING_TOKEN_KEY = "true_relationship_pending_token_v1";
 
 function getFormBaseURL(){
