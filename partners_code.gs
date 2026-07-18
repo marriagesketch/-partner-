@@ -53,7 +53,7 @@
       （婚活プロフィールはAnalyticsシートが無いため含めない）
    ============================================================ */
 
-var SPREADSHEET_ID = 'YOUR_PARTNERS_SPREADSHEET_ID_HERE'; // ← Partners用スプレッドシートのIDを設定
+var SPREADSHEET_ID = '1c3hRUtvJ6dY_hZZmPXhAxHt8WmLd_f57xZDjkahdHxs'; // ← Partners用スプレッドシートのIDを設定
 var SHEET_NAME      = 'Partners';
 var DATA_START_ROW  = 2; // 1行目=見出し, 2行目以降がデータ
 
@@ -61,10 +61,10 @@ var INTERNAL_SECRET = PropertiesService.getScriptProperties().getProperty('INTER
 
 // syncPartnerStatus の送信先（Analyticsシートを持つ4アプリのみ。婚活プロフィールは対象外）
 var APP_ENDPOINTS = [
-  'https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec', // 自己開示 Part1
-  'https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec', // 自己開示 Part2
-  'https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec', // 自己開示 Part3
-  'https://script.google.com/macros/s/XXXXXXXXXXXXXXXX/exec'  // すり合わせ
+  'https://script.google.com/macros/s/AKfycbwa7x1G4dHYRNUkfizGSXBcyxUemJzjIfKAtpfkeMJ8YQWYFtG_Om3kwltys85oamai/exec', // 自己開示 Part1
+  'https://script.google.com/macros/s/AKfycby68Ftif3vL0zULDk0kuP55jsIWCs5EcIFJr_sEz2f4X6NVZTJ4-4wzie04zTbR4TvA/exec', // 自己開示 Part2
+  'https://script.google.com/macros/s/AKfycbyP0doHt4EODuHGMTHbTIEFiDxuuMKVeNN67hgrlg67ZezcZr3Elb0h6zGmaz4tytee/exec', // 自己開示 Part3
+  'https://script.google.com/macros/s/AKfycbzyvzON4-aCxsV1T37MZhDpIvHj-bGhC2ODfHiSgRifompdUN7o_XYivh2VErYMm-v0/exec'  // すり合わせ
 ];
 
 // Partners シートの列番号（1-indexed）
