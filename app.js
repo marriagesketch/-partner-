@@ -277,10 +277,19 @@ function escapeHTML(str){
    ============================================================ */
 async function loadStatus(){
   const ownerHash = await sha256Hex(getLineUserId());
-  const result = await apiGet({ action:"myStatus", ownerHash });
+  let result;
+  try{
+    result = await apiGet({ action:"myStatus", ownerHash });
+  }catch(e){
+    console.error("myStatus fetch failed", e);
+    result = { ok:false, reason:"network_error" };
+  }
   if(!result.ok){
+    console.error("myStatus failed. reason:", result.reason);
     showError("状態の取得に失敗しました。時間をおいて再度お試しください。");
+    // 状態が分からない場合も「真剣交際に進む」操作自体はできるようにしておく
     renderNone();
+    bindStartHandler("startBtn", "introDisplayName");
     return;
   }
   if(result.status === "active"){
