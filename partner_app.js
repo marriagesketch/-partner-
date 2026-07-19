@@ -275,21 +275,33 @@ function escapeHTML(str){
 /* ============================================================
    自分の現在の状態を取得して描画（通常のリッチメニュー導線） 
    ============================================================ */
+/* myStatusの取得。LINEアプリ内ブラウザでは、ページ読み込み直後の
+   自動fetchがまれに一度だけ失敗することがあるため、1回だけ間を
+   おいてリトライする（ユーザー操作起点の通信では起きにくいため）。 */
+async function fetchMyStatusWithRetry(ownerHash){
+  for(let attempt = 0; attempt < 2; attempt++){
+    try{
+      const result = await apiGet({ action:"myStatus", ownerHash });
+      if(result.ok) return result;
+      console.warn("myStatus not ok (attempt " + attempt + "). reason:", result.reason);
+    }catch(e){
+      console.warn("myStatus fetch failed (attempt " + attempt + ")", e);
+    }
+    if(attempt === 0) await new Promise(r => setTimeout(r, 800));
+  }
+  return { ok:false, reason:"network_error" };
+}
+
 async function loadStatus(){
   const ownerHash = await sha256Hex(getLineUserId());
-  let result;
-  try{
-    result = await apiGet({ action:"myStatus", ownerHash });
-  }catch(e){
-    console.error("myStatus fetch failed", e);
-    result = { ok:false, reason:"network_error" };
-  }
+  const result = await fetchMyStatusWithRetry(ownerHash);
   if(!result.ok){
-    console.error("myStatus failed. reason:", result.reason);
-    showError("状態の取得に失敗しました。時間をおいて再度お試しください。");
-    // 状態が分からない場合も「真剣交際に進む」操作自体はできるようにしておく
+    console.error("myStatus failed after retry. reason:", result.reason);
+    // 実際の操作（登録・確認・終了）はPOSTで別途成功するため、
+    // ここは致命的エラー扱いにせず、未登録画面を出して控えめに知らせるだけにする
     renderNone();
     bindStartHandler("startBtn", "introDisplayName");
+    showToast("最新の状態を確認できませんでした。そのままご利用いただけます。");
     return;
   }
   if(result.status === "active"){
