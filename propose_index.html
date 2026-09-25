@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>プロポーズプラン</title>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+</head>
+
+<body>
+<div class="container">
+
+<div class="form-header">
+  <h1>プロポーズプラン</h1>
+  <p class="form-description">
+  本サービスは、プロポーズに関する希望のすり合わせを目的としています。<br>
+  プライバシー保護：LINE IDはハッシュ化（暗号化）して保存されます。表示名・プロフィール画像・メールアドレスなどは取得されません。<br>
+  再回答について：同じLINEアカウントから回答された場合、以前の内容は上書きされます。</p>
+</div>
+
+<!-- ビューモード表示エリア（共有リンクで開いたとき） -->
+<div id="viewMode"></div>
+
+<!-- パートナー未登録の場合に表示（app.jsが表示制御） -->
+<div id="partnerRequired" class="cta-card" style="display:none">
+  <div class="cta-content" style="text-align:center;">
+    <h3 class="cta-title">パートナー登録が必要です</h3>
+    <p class="cta-text">
+      プロポーズプランは、真剣交際のパートナー登録が完了した方のみご利用いただけます。<br>
+      先にパートナー登録を済ませてください。
+    </p>
+    <a href="https://liff.line.me/2010312230-xUsYz0UB" class="cta-button">
+      パートナー登録はこちら <span class="cta-arrow">›</span>
+    </a>
+  </div>
+</div>
+
+<!-- Q1 -->
+<label>Q1 以下の中でプロポーズの時にほしいものはありますか？ほしいもの全て選んでください。</label>
+<label><input type="checkbox" name="q1_1" value="a1_1-1">指輪</label>
+<label><input type="checkbox" name="q1_1" value="a1_1-2">花束</label>
+<label><input type="checkbox" name="q1_1" value="a1_1-3">手紙</label>
+<label><input type="checkbox" name="q1_1" value="a1_1-4">特にほしいものはない</label>
+<label><input type="checkbox" name="q1_1" value="a1_1-5" onchange="document.getElementById('q1_1_other').style.display=this.checked?'block':'none'">その他</label>
+<textarea id="q1_1_other" class="detail-textarea" style="display:none"></textarea>
+
+<!-- Q1-2（Q1-1で「指輪」を選択した場合のみ表示） -->
+<div id="q1_2_group" style="display:none">
+<label>Q プロポーズのときに指輪がほしいと答えた方、事前に一緒に見に行きたいですか？</label>
+<label><input type="radio" name="q1_2" value="a1_2-1">事前にお店に一緒に行って婚約指輪を選びたい</label>
+<label><input type="radio" name="q1_2" value="a1_2-2">プロポーズの時はプロポーズリングをもらって、後から一緒に婚約指輪を選びたい</label>
+<label><input type="radio" name="q1_2" value="a1_2-3">婚約指輪の希望はある程度伝えた上で、お店で決めるのは相手に任せる</label>
+<label><input type="radio" name="q1_2" value="a1_2-4" onchange="document.getElementById('q1_2_other').style.display=this.checked?'block':'none'">その他</label>
+<textarea id="q1_2_other" class="detail-textarea"  style="display:none"></textarea>
+</div>
+
+<!-- Q2 -->
+<label>Q2 プロポーズ場所の希望はありますか？</label>
+<label><input type="radio" name="q2" value="a2-1">レストラン</label>
+<label><input type="radio" name="q2" value="a2-2">ホテルの客室</label>
+<label><input type="radio" name="q2" value="a2-3">同棲している家もしくはどちらかの自宅</label>
+<label><input type="radio" name="q2" value="a2-4">どこでもいい</label>
+<label><input type="radio" name="q2" value="a2-5" onchange="document.getElementById('q2_other').style.display=this.checked?'block':'none'">思い出の場所、その他</label>
+<textarea id="q2_other" class="detail-textarea"  style="display:none"></textarea>
+
+<!-- Q3 -->
+<label>Q3 プロポーズの日程にこだわりがあれば教えてください。</label>
+<label><input type="radio" name="q3" value="a3-1">記念日</label>
+<label><input type="radio" name="q3" value="a3-2">誕生日</label>
+<label><input type="radio" name="q3" value="a3-3">クリスマス</label>
+<label><input type="radio" name="q3" value="a3-4">バレンタイン</label>
+<label><input type="radio" name="q3" value="a3-5" onchange="document.getElementById('q3_other').style.display=this.checked?'block':'none'">その他</label>
+<textarea id="q3_other" class="detail-textarea" style="display:none"></textarea>
+
+<!-- Q4 -->
+<label>Q4 プロポーズについて、これだけは嫌というものがあれば教えてください。</label>
+<textarea id="q4" class="detail-textarea" placeholder="例えば、フラッシュモブ、すっぴんの時"></textarea>
+
+<!-- Q5 -->
+<label>Q5 上記の他に理想のプロポーズはありますか？</label>
+<textarea id="q5" class="detail-textarea"></textarea>
+
+<div class="button-group">
+  <button id="submitBtn" type="button">送信</button>
+  <div class="sub-buttons">
+    <button id="draftBtn" type="button">下書き保存</button>
+    <button id="clearBtn" type="button">フォームクリア</button>
+  </div>
+</div>
+
+<!-- 共有モーダル -->
+<div id="shareModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>共有</h3>
+    <input id="shareName" placeholder="お名前を入力してください（任意）">
+    <button id="shareBtn">共有する</button>
+  </div>
+</div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
