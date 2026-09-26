@@ -539,3 +539,27 @@ input[type="range"]{
     font-size:18px;
   }
 }
+
+/********************************
+ * 暗号キー入力ゲート／状態バナー（追加分）
+ ********************************/
+
+#pairKeySubmitBtn:hover{
+  opacity:.95;
+}
+#pairKeySubmitBtn:disabled{
+  opacity:.6;
+  cursor:default;
+}
+
+#pairKeyInput:focus{
+  outline:2px solid #f48ca0;
+  outline-offset:1px;
+}
+
+#editAnswerBtn:hover{
+  background:#fff6f7;
+}
+#refreshPairBtn:hover{
+  background:#f0f0f0;
+}

@@ -72,7 +72,9 @@ var PCOL = {
   ID: 1, USER_A_HASH: 2, USER_B_HASH: 3,
   USER_A_DISPLAY_NAME: 4, USER_B_DISPLAY_NAME: 5,
   STATUS: 6, INVITE_TOKEN: 7,
-  CREATED_AT: 8, CONFIRMED_AT: 9, ENDED_AT: 10, ENDED_BY: 11, UPDATED_AT: 12
+  CREATED_AT: 8, CONFIRMED_AT: 9, ENDED_AT: 10, ENDED_BY: 11, UPDATED_AT: 12,
+  // ↓ 真剣交際後の各種ミニアプリ（プロポーズプラン等）で共通して使う「暗号キー」
+  PAIR_KEY: 13, PAIR_KEY_HASH: 14
 };
 
 
@@ -83,9 +85,10 @@ function setupPartnersSheet() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
-  sheet.getRange(1, 1, 1, 12).setValues([[
+  sheet.getRange(1, 1, 1, 14).setValues([[
     'id', 'userAHash', 'userBHash', 'userADisplayName', 'userBDisplayName',
-    'status', 'inviteToken', 'createdAt', 'confirmedAt', 'endedAt', 'endedBy', 'updatedAt'
+    'status', 'inviteToken', 'createdAt', 'confirmedAt', 'endedAt', 'endedBy', 'updatedAt',
+    'pairKey', 'pairKeyHash'
   ]]);
 }
 
@@ -98,6 +101,15 @@ function doGet(e) {
     var action = e.parameter.action;
     if (action === 'status') {
       return handleStatus(e.parameter.ownerHash, e.parameter.secret);
+    }
+    if (action === 'myStatus') {
+      return handleMyStatus(e.parameter.ownerHash);
+    }
+    if (action === 'inviteInfo') {
+      return handleInviteInfo(e.parameter.token);
+    }
+    if (action === 'validatePairKeyHash') {
+      return handleValidatePairKeyHash(e.parameter.pairKeyHash, e.parameter.secret);
     }
     return jsonResponse({ ok: false, reason: 'invalid_action' });
   } catch (err) {
@@ -128,6 +140,35 @@ function getSheet() {
   return SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
 }
 
+/* GAS上でのSHA-256（16進文字列）計算。
+   各ミニアプリのクライアント側 sha256Hex("lookup:" + pairKey) と
+   必ず同じプレフィックス・同じアルゴリズムで揃えること。 */
+function sha256HexGS(str) {
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, str, Utilities.Charset.UTF_8);
+  return raw.map(function (b) {
+    var v = (b < 0 ? b + 256 : b).toString(16);
+    return v.length === 1 ? '0' + v : v;
+  }).join('');
+}
+
+/* 真剣交際後の各ミニアプリ（プロポーズプラン等）で共通して使う
+   「暗号キー」を発行する。紛らわしい文字（0/O, 1/I/L）を除いた
+   32文字の英数字から、4文字×4グループ（合計約80bit）を生成する。
+   このキー自体は答えの暗号化キーの材料にもなるため、Partners以外の
+   サーバーには常にハッシュ化してから送る運用とする。 */
+function generatePairKey() {
+  var alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  var groups = [];
+  for (var g = 0; g < 4; g++) {
+    var chars = [];
+    for (var i = 0; i < 4; i++) {
+      chars.push(alphabet.charAt(Math.floor(Math.random() * alphabet.length)));
+    }
+    groups.push(chars.join(''));
+  }
+  return groups.join('-');
+}
+
 
 /* ------------------------------------------------------------
    action=status（サーバー間限定・secret必須）
@@ -145,32 +186,125 @@ function handleStatus(ownerHash, secret) {
   if (!INTERNAL_SECRET || secret !== INTERNAL_SECRET) {
     return jsonResponse({ ok: false, reason: 'forbidden' });
   }
+  var full = computeFullStatus(ownerHash);
+  return jsonResponse({
+    ok: true,
+    active: full.status === 'active',
+    everPartnered: (full.status === 'active' || full.status === 'ended'),
+    partnerHash: full.partnerHash,
+    partnerDisplayName: full.partnerDisplayName,
+    startedAt: full.startedAt
+  });
+}
 
+
+/* ------------------------------------------------------------
+   action=myStatus（ユーザー本人のLIFFから直接呼ばれる。secret不要）
+   secretを要求しない代わりに、返す情報は「自分自身の状態」のみ。
+   ・status: 'none' | 'pending_sent' | 'active' | 'ended'
+   ・pending_sent の場合のみ inviteToken を含める
+   ・active の場合のみ pairKey を含める
+     （真剣交際後の各ミニアプリ共通の「暗号キー」。本人・パートナー
+     以外には見せないため、この本人限定エンドポイントでのみ返す）
+   ------------------------------------------------------------ */
+function handleMyStatus(ownerHash) {
+  if (!ownerHash) return jsonResponse({ ok: false, reason: 'invalid_params' });
+  var full = computeFullStatus(ownerHash);
+  return jsonResponse(Object.assign({ ok: true }, full));
+}
+
+function computeFullStatus(ownerHash) {
   var rows = getAllRows(getSheet());
-  var activeRow = null;
-  var everPartnered = false;
+  var activeRow = null, pendingRow = null, lastEndedRow = null;
 
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     var isParty = (r.userAHash === ownerHash || r.userBHash === ownerHash);
     if (!isParty) continue;
-    if (r.status === 'active') activeRow = r;
-    if (r.status === 'active' || r.status === 'ended') everPartnered = true;
+    if (r.status === 'active') {
+      activeRow = r;
+    } else if (r.status === 'pending' && r.userAHash === ownerHash) {
+      // pending_sent とみなすのは招待した本人（userA）のみ。
+      pendingRow = r;
+    } else if (r.status === 'ended') {
+      if (!lastEndedRow || new Date(r.endedAt) > new Date(lastEndedRow.endedAt)) lastEndedRow = r;
+    }
   }
 
   if (activeRow) {
     var isA = activeRow.userAHash === ownerHash;
-    return jsonResponse({
-      ok: true,
-      active: true,
-      everPartnered: true,
+    return {
+      status: 'active',
       partnerHash: isA ? activeRow.userBHash : activeRow.userAHash,
       partnerDisplayName: isA ? activeRow.userBDisplayName : activeRow.userADisplayName,
-      startedAt: activeRow.confirmedAt
-    });
+      startedAt: activeRow.confirmedAt,
+      endedAt: '',
+      pairKey: activeRow.pairKey || ''
+    };
+  }
+  if (pendingRow) {
+    return {
+      status: 'pending_sent',
+      inviteToken: pendingRow.inviteToken,
+      partnerHash: '', partnerDisplayName: '', startedAt: '', endedAt: ''
+    };
+  }
+  if (lastEndedRow) {
+    var isA2 = lastEndedRow.userAHash === ownerHash;
+    return {
+      status: 'ended',
+      partnerHash: isA2 ? lastEndedRow.userBHash : lastEndedRow.userAHash,
+      partnerDisplayName: isA2 ? lastEndedRow.userBDisplayName : lastEndedRow.userADisplayName,
+      startedAt: lastEndedRow.confirmedAt,
+      endedAt: lastEndedRow.endedAt
+    };
+  }
+  return { status: 'none', partnerHash: '', partnerDisplayName: '', startedAt: '', endedAt: '' };
+}
+
+
+/* ------------------------------------------------------------
+   action=inviteInfo（招待リンクを開いた相手が、確認前にプレビューする用。
+   secret不要。トークンさえ知っていれば閲覧できる、共有リンク方式と
+   同じ考え方。ハッシュなど個人特定情報は一切返さない）
+   ------------------------------------------------------------ */
+function handleInviteInfo(token) {
+  if (!token) return jsonResponse({ ok: false, reason: 'invalid_params' });
+  var rowIndex = findRowIndexByToken(getSheet(), token);
+  if (!rowIndex) return jsonResponse({ ok: false, reason: 'invalid_or_expired_token' });
+  var row = getRowObject(getSheet(), rowIndex);
+  if (row.status !== 'pending') return jsonResponse({ ok: false, reason: 'invalid_or_expired_token' });
+  return jsonResponse({ ok: true, inviterDisplayName: row.userADisplayName || '' });
+}
+
+
+/* ------------------------------------------------------------
+   action=validatePairKeyHash（サーバー間限定・secret必須）
+   プロポーズプラン等、真剣交際後限定の各ミニアプリから呼ばれる。
+   クライアントは生の暗号キーを一切サーバーに送らず、
+   sha256Hex("lookup:" + pairKey) をここに渡して照合する。
+   ・見つからない                → {ok:false, reason:'invalid_key'}
+   ・見つかったが現在active以外  → {ok:true, active:false}
+     （交際終了後は同じキーが使えなくなる）
+   ・見つかってactive            → {ok:true, active:true, userAHash, userBHash}
+   ------------------------------------------------------------ */
+function handleValidatePairKeyHash(pairKeyHash, secret) {
+  if (!pairKeyHash) return jsonResponse({ ok: false, reason: 'invalid_params' });
+  if (!INTERNAL_SECRET || secret !== INTERNAL_SECRET) {
+    return jsonResponse({ ok: false, reason: 'forbidden' });
   }
 
-  return jsonResponse({ ok: true, active: false, everPartnered: everPartnered });
+  var rows = getAllRows(getSheet());
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (r.pairKeyHash && r.pairKeyHash === pairKeyHash) {
+      if (r.status === 'active') {
+        return jsonResponse({ ok: true, active: true, userAHash: r.userAHash, userBHash: r.userBHash });
+      }
+      return jsonResponse({ ok: true, active: false });
+    }
+  }
+  return jsonResponse({ ok: false, reason: 'invalid_key' });
 }
 
 
@@ -244,12 +378,16 @@ function handleConfirm(body) {
     }
 
     var now = new Date();
+    var pairKey = generatePairKey();
+    var pairKeyHash = sha256HexGS('lookup:' + pairKey);
     sheet.getRange(rowIndex, PCOL.USER_B_HASH).setValue(viewerHash);
     sheet.getRange(rowIndex, PCOL.USER_B_DISPLAY_NAME).setValue(displayName);
     sheet.getRange(rowIndex, PCOL.STATUS).setValue('active');
     sheet.getRange(rowIndex, PCOL.INVITE_TOKEN).setValue(''); // トークンは1回限り。以後無効化
     sheet.getRange(rowIndex, PCOL.CONFIRMED_AT).setValue(now);
     sheet.getRange(rowIndex, PCOL.UPDATED_AT).setValue(now);
+    sheet.getRange(rowIndex, PCOL.PAIR_KEY).setValue(pairKey);
+    sheet.getRange(rowIndex, PCOL.PAIR_KEY_HASH).setValue(pairKeyHash);
 
     syncAnalyticsForBothUsers({
       userAHash: row.userAHash,
@@ -262,7 +400,8 @@ function handleConfirm(body) {
     return jsonResponse({
       ok: true,
       partnerHash: row.userAHash,
-      partnerDisplayName: row.userADisplayName
+      partnerDisplayName: row.userADisplayName,
+      pairKey: pairKey
     });
   } finally {
     lock.releaseLock();
@@ -388,7 +527,7 @@ function postToAppSafely(url, payload) {
 function getAllRows(sheet) {
   var lastRow = sheet.getLastRow();
   if (lastRow < DATA_START_ROW) return [];
-  var values = sheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, PCOL.UPDATED_AT).getValues();
+  var values = sheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, PCOL.PAIR_KEY_HASH).getValues();
   return values.map(function (v) {
     return {
       id: v[PCOL.ID - 1],
@@ -402,7 +541,9 @@ function getAllRows(sheet) {
       confirmedAt: v[PCOL.CONFIRMED_AT - 1],
       endedAt: v[PCOL.ENDED_AT - 1],
       endedBy: v[PCOL.ENDED_BY - 1],
-      updatedAt: v[PCOL.UPDATED_AT - 1]
+      updatedAt: v[PCOL.UPDATED_AT - 1],
+      pairKey: v[PCOL.PAIR_KEY - 1],
+      pairKeyHash: v[PCOL.PAIR_KEY_HASH - 1]
     };
   });
 }
