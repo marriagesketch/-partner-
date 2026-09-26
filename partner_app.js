@@ -161,21 +161,11 @@ function renderPending(inviteToken){
     else{ showError("取り消しに失敗しました。時間をおいて再度お試しください。"); }
   };
 }
-function renderActive(partnerDisplayName, startedAt, pairKey){
+function renderActive(partnerDisplayName, startedAt){
   setRingsState("active");
   document.getElementById("pageTitle").textContent = "真剣交際中";
   document.getElementById("activePartnerName").textContent = partnerDisplayName || "（お相手）";
   document.getElementById("activeStartedAt").textContent = formatDate(startedAt);
-  const pairKeyRow = document.getElementById("pairKeyRow");
-  if(pairKeyRow){
-    if(pairKey){
-      pairKeyRow.classList.remove("hidden");
-      document.getElementById("pairKeyText").textContent = pairKey;
-      document.getElementById("copyPairKeyBtn").onclick = () => copyToClipboard(pairKey);
-    }else{
-      pairKeyRow.classList.add("hidden");
-    }
-  }
   showOnly("screen-active");
   document.getElementById("endBtn").onclick = async () => {
     const ok = await confirmSheet(
@@ -268,7 +258,7 @@ async function renderConfirmScreen(inviteToken){
       }
       try{ sessionStorage.removeItem(PENDING_TOKEN_KEY); }catch(_){}
       showToast("真剣交際を登録しました");
-      renderActive(result.partnerDisplayName, new Date().toISOString(), result.pairKey);
+      renderActive(result.partnerDisplayName, new Date().toISOString());
     }catch(e){
       console.error(e);
       showError("通信に失敗しました。時間をおいて再度お試しください。");
@@ -315,7 +305,7 @@ async function loadStatus(){
     return;
   }
   if(result.status === "active"){
-    renderActive(result.partnerDisplayName, result.startedAt, result.pairKey);
+    renderActive(result.partnerDisplayName, result.startedAt);
   }else if(result.status === "pending_sent"){
     renderPending(result.inviteToken);
   }else if(result.status === "ended"){

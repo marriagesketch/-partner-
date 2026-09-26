@@ -193,7 +193,11 @@ function handleStatus(ownerHash, secret) {
     everPartnered: (full.status === 'active' || full.status === 'ended'),
     partnerHash: full.partnerHash,
     partnerDisplayName: full.partnerDisplayName,
-    startedAt: full.startedAt
+    startedAt: full.startedAt,
+    // active中のみ、真剣交際限定ミニアプリの暗号化に使う鍵材料を含める。
+    // サーバー間限定（secret必須）のこのレスポンスでのみ渡し、
+    // ユーザーが直接目にする画面には表示しない。
+    pairKey: full.status === 'active' ? (full.pairKey || '') : ''
   });
 }
 

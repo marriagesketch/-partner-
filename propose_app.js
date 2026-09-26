@@ -1,19 +1,18 @@
 /* ============================================================
-   プロポーズプラン – app.js（暗号キー方式）
+   プロポーズプラン – app.js（自動ペア判定方式）
    ------------------------------------------------------------
-   ・真剣交際登録時にPartners側で発行される「暗号キー」を入力して
-     使う。共有リンク・shareTargetPickerは使わない。
-   ・暗号キーの生データはサーバーに一切送らない。
-     - sha256Hex("lookup:" + 暗号キー) … Partnersでの検証に使うハッシュ
-     - sha256("cipher:" + 暗号キー)   … 回答の暗号化に使うAES鍵の材料
-     いずれも一方向ハッシュのため、ハッシュ値からは暗号キー自体も
-     もう一方の値も導出できない。
+   ・ユーザーは暗号キーの入力も個別リンクの受け渡しも一切行わない。
+   ・サーバーに送るのは ownerHash（LINE userIdのSHA-256）だけ。
+   ・propose_code.gs が毎回 Partners中央API に ownerHash を問い合わせ、
+     「現在の真剣交際パートナー」と「ペア専用の暗号鍵材料(pairKey)」を
+     自動的に取得し、fetchPairの応答に含めて返す。
+   ・pairKeyの生値はユーザーには一切表示せず、ブラウザのメモリ上で
+     AES鍵の導出にのみ使う（回答の暗号化・復号のため）。
    ・「入力完了」を押すまでは相手はこちらの回答を見られない。
    ============================================================ */
 
 const LIFF_ID   = "2010606389-v29ZSV0f"; // ※ 婚活すり合わせと別アプリとして登録する場合は差し替えてください
 const DRAFT_KEY = "proposal_plan_draft_v1";
-const PAIR_KEY_STORAGE = "proposal_plan_pair_key_v1";
 
 // ▼▼▼ デプロイ済みGAS Web AppのURL ▼▼▼
 const GAS_ENDPOINT = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec";
@@ -46,15 +45,10 @@ async function sha256Hex(str) {
 }
 
 /* ============================================================
-   暗号キーからの派生値
-   ・lookupHash … Partnersでの検証、Answers/Analyticsシートでの
-     行の特定に使う（生の暗号キーを一切含まない）
-   ・aesKey     … 回答の暗号化・復号に使う（サーバーには一切送らない）
-   同じ生の暗号キーから導出しても、prefixが違うため異なる値になる。
+   暗号鍵材料からのAES鍵導出
+   ・pairKey（生値）はfetchPairの応答で自動的に受け取る。
+     ユーザーが目にしたり入力したりすることはない。
    ============================================================ */
-async function deriveLookupHash(pairKey) {
-  return sha256Hex("lookup:" + pairKey);
-}
 async function deriveAesKey(pairKey) {
   const material = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("cipher:" + pairKey));
   return crypto.subtle.importKey("raw", material, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
@@ -351,105 +345,95 @@ function hideStateCard() {
 }
 
 /* ============================================================
-   暗号キー入力ゲート
+   パートナー未登録／交際終了時の案内
+   （既存の「パートナー登録が必要です」CTAカードを、状況に応じた
+   文言に差し替えて使う）
    ============================================================ */
-function pairKeyReasonToMessage(reason) {
+function partnerReasonToText(reason) {
   switch (reason) {
-    case "invalid_key":   return "この暗号キーが見つかりません。入力内容をご確認ください。";
-    case "partner_ended": return "パートナーが解除されているため、この暗号キーは使用できません。最新の暗号キーはパートナー登録画面でご確認ください。";
-    case "not_a_party":   return "このキーは、あなたとお相手の組み合わせのものではないようです。";
-    default:              return "暗号キーの確認に失敗しました。時間をおいて再度お試しください。";
+    case "partner_ended":
+      return {
+        title: "パートナーが解除されています",
+        text: "以前のお相手との真剣交際は終了しています。新しいパートナーを登録すると、プロポーズプランをご利用いただけます。"
+      };
+    case "no_partner":
+      return {
+        title: "パートナー登録が必要です",
+        text: "プロポーズプランは、真剣交際のパートナー登録が完了した方のみご利用いただけます。先にパートナー登録を済ませてください。"
+      };
+    default:
+      return {
+        title: "読み込みに失敗しました",
+        text: "時間をおいてもう一度開き直してください。"
+      };
   }
 }
 
-function showKeyGate(prefill, errorMessage) {
+function showPartnerRequired(reason) {
   setFormVisible(false);
-  const container = getOrCreateContainer("viewMode");
-  container.style.display = "block";
-  container.innerHTML = `
-    <div class="view-header" style="text-align:left;">
-      <p class="view-label" style="text-align:center;">暗号キーの入力</p>
-      <p class="state-text" style="margin-top:8px;">
-        プロポーズプランは、真剣交際のお相手との暗号キーで開きます。<br>
-        暗号キーは、パートナー登録画面（真剣交際中の画面）で確認できます。
-      </p>
-      ${errorMessage ? `<p class="state-text" style="color:#c0392b; margin-top:10px;">${escapeHTML(errorMessage)}</p>` : ""}
-      <input type="text" id="pairKeyInput" placeholder="例）AB3D-K9QZ-..." value="${escapeHTML(prefill || "")}"
-        style="width:100%; margin-top:14px; padding:14px; border:1px solid #f0c5cc; border-radius:12px; font-size:15px; text-align:center; letter-spacing:.05em;">
-      <button type="button" id="pairKeySubmitBtn" style="width:100%; margin-top:14px; padding:16px; border:none; border-radius:14px; background:#f48ca0; color:#fff; font-size:16px; font-weight:700; cursor:pointer;">
-        回答画面を開く
-      </button>
-    </div>
-  `;
-
-  // パートナー未登録の方向けの案内（既存のCTAカードは元の位置のまま、表示だけ切り替える）
+  hideStateCard();
+  const { title, text } = partnerReasonToText(reason);
   const partnerRequired = document.getElementById("partnerRequired");
   if (partnerRequired) {
+    const titleEl = partnerRequired.querySelector(".cta-title");
+    const textEl = partnerRequired.querySelector(".cta-text");
+    if (titleEl) titleEl.textContent = title;
+    if (textEl) textEl.innerHTML = escapeHTML(text).replace(/\n/g, "<br>");
     partnerRequired.style.display = "block";
-  }
-
-  document.getElementById("pairKeySubmitBtn").addEventListener("click", onPairKeySubmit);
-  document.getElementById("pairKeyInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") onPairKeySubmit();
-  });
-}
-
-async function onPairKeySubmit() {
-  const btn = document.getElementById("pairKeySubmitBtn");
-  const input = document.getElementById("pairKeyInput");
-  const pairKey = (input.value || "").trim();
-  if (!pairKey) return;
-
-  btn.disabled = true;
-  const originalLabel = btn.textContent;
-  btn.textContent = "確認中…";
-
-  try {
-    const ownerHash = await sha256Hex(getLineUserId());
-    const lookupHash = await deriveLookupHash(pairKey);
-
-    const url = `${GAS_ENDPOINT}?action=fetchPair&pairKeyHash=${encodeURIComponent(lookupHash)}&ownerHash=${encodeURIComponent(ownerHash)}`;
-    const resp = await fetch(url, { method: "GET" });
-    const result = await resp.json();
-
-    if (!result.ok) {
-      showKeyGate(pairKey, pairKeyReasonToMessage(result.reason));
-      return;
-    }
-
-    try { localStorage.setItem(PAIR_KEY_STORAGE, pairKey); } catch (_) {}
-    await enterAnswerScreen(pairKey, lookupHash, ownerHash, result);
-  } catch (e) {
-    console.error("pair key validation error", e);
-    showKeyGate(pairKey, "通信に失敗しました。通信環境を確認してもう一度お試しください。");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalLabel;
+  } else {
+    showStateCard(title, text);
   }
 }
 
 /* ============================================================
-   回答画面（キー検証済み）の状態管理
+   回答画面の状態管理（自動ペア判定）
    ============================================================ */
-const AppState = { pairKey: null, lookupHash: null, ownerHash: null };
+const AppState = { pairKey: null, ownerHash: null };
 
-async function enterAnswerScreen(pairKey, lookupHash, ownerHash, fetchResult) {
-  AppState.pairKey = pairKey;
-  AppState.lookupHash = lookupHash;
+async function fetchPair(ownerHash) {
+  const url = `${GAS_ENDPOINT}?action=fetchPair&ownerHash=${encodeURIComponent(ownerHash)}`;
+  const resp = await fetch(url, { method: "GET" });
+  return resp.json();
+}
+
+async function initAnswerScreen(ownerHash) {
   AppState.ownerHash = ownerHash;
+  showStateCard("読み込み中", "パートナー情報を確認しています…", true);
+
+  let result;
+  try {
+    result = await fetchPair(ownerHash);
+  } catch (e) {
+    console.error("fetchPair failed", e);
+    showPartnerRequired("server_error");
+    return;
+  }
+
+  if (!result.ok) {
+    showPartnerRequired(result.reason);
+    return;
+  }
+
+  AppState.pairKey = result.pairKey;
   hideStateCard();
-  await renderAnswerScreen(fetchResult);
+  await renderAnswerScreen(result);
 }
 
 async function refetchPair() {
-  const url = `${GAS_ENDPOINT}?action=fetchPair&pairKeyHash=${encodeURIComponent(AppState.lookupHash)}&ownerHash=${encodeURIComponent(AppState.ownerHash)}`;
-  const resp = await fetch(url, { method: "GET" });
-  const result = await resp.json();
-  if (!result.ok) {
-    // 取得中に交際終了などでキーが無効になった場合はゲートに戻す
-    showKeyGate(AppState.pairKey, pairKeyReasonToMessage(result.reason));
+  let result;
+  try {
+    result = await fetchPair(AppState.ownerHash);
+  } catch (e) {
+    console.error("fetchPair failed", e);
+    showPartnerRequired("server_error");
     return null;
   }
+  if (!result.ok) {
+    // 取得中に交際終了などがあった場合は案内画面に戻す
+    showPartnerRequired(result.reason);
+    return null;
+  }
+  AppState.pairKey = result.pairKey;
   return result;
 }
 
@@ -463,7 +447,7 @@ async function renderAnswerScreen(fetchResult) {
     try { ownData = await decryptJSON(fetchResult.own.cipherText, aesKey); }
     catch (e) {
       console.error("decrypt own answer failed", e);
-      showStateCard("復号に失敗しました", "暗号キーが正しくない可能性があります。パートナー登録画面で最新の暗号キーをご確認ください。");
+      showStateCard("復号に失敗しました", "時間をおいてもう一度開き直してください。改善しない場合はご連絡ください。");
       return;
     }
     renderCompletedView(ownData, fetchResult.partner, aesKey);
@@ -531,7 +515,6 @@ async function submitAnswer(data, completed, aesKey) {
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({
       action: "submit",
-      pairKeyHash: AppState.lookupHash,
       ownerHash: AppState.ownerHash,
       cipherText, completed, analytics
     }),
@@ -685,11 +668,7 @@ async function checkFriendship() {
     try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
   });
 
-  /* ----- 暗号キーの入力ゲートから開始 -----
-     前回入力済みの暗号キーがあれば自動入力するが、開くにはワン
-     クリックの確認操作を必ず挟む（交際終了などでキーが無効になって
-     いる可能性を、開くたびにサーバー側で検証するため）。 */
-  let savedPairKey = "";
-  try { savedPairKey = localStorage.getItem(PAIR_KEY_STORAGE) || ""; } catch (_) {}
-  showKeyGate(savedPairKey, "");
+  /* ----- パートナー判定→回答画面へ（ユーザー操作は不要） ----- */
+  const ownerHash = await sha256Hex(getLineUserId());
+  await initAnswerScreen(ownerHash);
 })();

@@ -2,23 +2,24 @@
    プロポーズプラン – GAS バックエンド (Code.gs)
    スプレッドシートID: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
    ------------------------------------------------------------
-   【方式（暗号キー方式）】
-   ・共有はshareTargetPickerによるリンク送付ではなく、真剣交際
-     登録時にPartners側で発行される「暗号キー」で行う。
-   ・ユーザーはこのアプリを開くとき、暗号キー（パートナー登録画面
-     で確認できる）を入力する。以後はローカルに保存され、次回から
-     自動入力される（ただし開くには毎回ワンクリックの確認が要る）。
-   ・入力した回答は、暗号キーから導出したAES鍵でクライアント側で
-     暗号化してから送信する。暗号キーの生データはこのサーバーは
-     おろかPartnersサーバーにも送らない。送るのは
-     sha256Hex("lookup:" + 暗号キー) というハッシュ値のみ。
-     （AES鍵は sha256("cipher:" + 暗号キー) から導出するため、
-     このハッシュ値だけを知っていてもAES鍵は導出できない）
+   【方式：自動ペア判定＋自動暗号鍵取得】
+   ・ユーザーは暗号キーの入力も、個別の招待リンクも一切扱わない。
+   ・クライアントが送るのは ownerHash（LINE userIdのSHA-256）だけ。
+   ・このサーバーは、受け取った ownerHash を毎回 Partners中央API
+     （サーバー間限定・INTERNAL_SECRET必須）に問い合わせて、
+     「現在の真剣交際パートナー」と「ペア専用の暗号鍵材料
+     （Partners側で真剣交際成立時に発行済みのpairKey）」を取得する。
+   ・pairKeyは常にPartners側が真実の情報源（single source of truth）
+     であり、クライアントから送られてきた値を信用することはしない
+     （なりすまし・古い値の使い回しを防ぐため）。
+   ・回答本体は、pairKeyから導出したAES鍵でクライアント側で暗号化
+     してから保存する。pairKeyの生値はこのシートには保存しない
+     （sha256("lookup:"+pairKey) をシート内の行の特定キーとして使う）。
    ・「入力完了」ボタンを押すまでは、相手はこちらの回答を見られない。
      入力完了後に「編集する」を押すと未完了状態に戻り、再度入力完了
      するまでまた見られなくなる。
-   ・交際終了後は、同じ暗号キーを入力しても回答画面自体を開けない
-     （Partners側でその暗号キーのpairKeyHashがactive以外になるため）。
+   ・交際終了後は、Partners側でそのpairKeyがactive以外になるため、
+     自動的に回答画面自体が開けなくなる。
    ------------------------------------------------------------
    シート構成:
    ・「Answers」   … 暗号化済みの回答本体（1人 × 1組につき1行）
@@ -69,51 +70,54 @@ var ANALYTICS_HEADER = [
 ];
 
 /* ------------------------------------------------------------
-   Partners中央APIとの連携（暗号キーの検証）
+   Partners中央APIとの連携（ownerHash → 現在のパートナー＋暗号鍵材料）
    ------------------------------------------------------------ */
 var PARTNERS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzqT-qmVRh_jI04stlgYiWCypqWHjWkGv-0pNGkpvUt3c8FGQzQG_FBF7eWeb3frcDk/exec'; // ← Partners用GASの/exec URLを設定
 var INTERNAL_SECRET    = PropertiesService.getScriptProperties().getProperty('INTERNAL_SECRET') || '';
-var PAIR_VALIDATION_CACHE_SECONDS = 300; // 5分キャッシュ
+var PARTNER_CACHE_SECONDS = 120; // 2分キャッシュ（Partnersへの往復回数を減らす）
 
-/* pairKeyHash を Partners に照会する。
-   戻り値: { ok, active, userAHash, userBHash, reason } */
-function validatePairKeyHash(pairKeyHash) {
+/* ownerHashからPartnersに真剣交際の状態を問い合わせる。
+   戻り値: { ok, active, everPartnered, partnerHash, pairKey } */
+function resolvePartner(ownerHash) {
   var cache = CacheService.getScriptCache();
-  var cacheKey = 'pairkey_' + pairKeyHash;
+  var cacheKey = 'partner_' + ownerHash;
   var cached = cache.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
-  var result = { ok: false, reason: 'server_error' };
+  var result = { ok: false, active: false, everPartnered: false, partnerHash: '', pairKey: '' };
   try {
-    var url = PARTNERS_ENDPOINT + '?action=validatePairKeyHash'
-      + '&pairKeyHash=' + encodeURIComponent(pairKeyHash)
+    var url = PARTNERS_ENDPOINT + '?action=status'
+      + '&ownerHash=' + encodeURIComponent(ownerHash)
       + '&secret=' + encodeURIComponent(INTERNAL_SECRET);
     var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    result = JSON.parse(res.getContentText());
+    var body = JSON.parse(res.getContentText());
+    if (body.ok) {
+      result = {
+        ok: true,
+        active: !!body.active,
+        everPartnered: !!body.everPartnered,
+        partnerHash: body.partnerHash || '',
+        pairKey: body.pairKey || ''
+      };
+    }
   } catch (err) {
-    Logger.log('validatePairKeyHash failed: ' + err);
-    result = { ok: false, reason: 'server_error' };
+    Logger.log('resolvePartner failed: ' + err);
   }
-  // invalid_key（そもそも存在しない）や active:false（交際終了済み）は
-  // 短くキャッシュしすぎない方が安全なので、成功時のみ・短めにキャッシュする
-  if (result.ok) {
-    cache.put(cacheKey, JSON.stringify(result), PAIR_VALIDATION_CACHE_SECONDS);
+  // activeな場合のみキャッシュする（交際終了直後の反映を遅らせすぎないため）
+  if (result.ok && result.active) {
+    cache.put(cacheKey, JSON.stringify(result), PARTNER_CACHE_SECONDS);
   }
   return result;
 }
 
-/* pairKeyHashを検証し、かつ ownerHash がその2人のどちらかであることも
-   確認する。共通の前処理としてすべてのアクションの先頭で呼ぶ。
-   戻り値: { ok, partnerHash, reason } */
-function validatePairKeyHashForOwner(pairKeyHash, ownerHash) {
-  var v = validatePairKeyHash(pairKeyHash);
-  if (!v.ok) return { ok: false, reason: v.reason || 'invalid_key' };
-  if (!v.active) return { ok: false, reason: 'partner_ended' };
-  if (v.userAHash !== ownerHash && v.userBHash !== ownerHash) {
-    return { ok: false, reason: 'not_a_party' };
-  }
-  var partnerHash = (v.userAHash === ownerHash) ? v.userBHash : v.userAHash;
-  return { ok: true, partnerHash: partnerHash };
+/* GAS上でのSHA-256（16進文字列）。クライアント側の
+   sha256Hex("lookup:" + pairKey) と必ず同じ計算方法で揃えること。 */
+function sha256HexGS(str) {
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, str, Utilities.Charset.UTF_8);
+  return raw.map(function (b) {
+    var v = (b < 0 ? b + 256 : b).toString(16);
+    return v.length === 1 ? '0' + v : v;
+  }).join('');
 }
 
 
@@ -124,7 +128,7 @@ function doGet(e) {
   try {
     var action = e.parameter.action;
     if (action === 'fetchPair') {
-      return handleFetchPair(e.parameter.pairKeyHash, e.parameter.ownerHash);
+      return handleFetchPair(e.parameter.ownerHash);
     }
     return jsonResponse({ ok: false, reason: 'invalid_action' });
   } catch (err) {
@@ -168,25 +172,38 @@ function getOrCreateSheet_(name, header) {
   return sheet;
 }
 
+/* reasonの共通判定。「そもそも真剣交際していない」のか
+   「していたが終了した」のかでUI側の案内文を変えられるようにする。 */
+function partnerReason(resolved) {
+  if (!resolved.ok) return 'server_error';
+  if (resolved.active) return null; // 問題なし
+  if (resolved.everPartnered) return 'partner_ended';
+  return 'no_partner';
+}
+
 
 /* ------------------------------------------------------------
-   action=submit（回答の保存。下書き保存ではなく「入力完了」操作、
-   および「編集する」による未完了への差し戻し、両方をこれで扱う）
-   body: { pairKeyHash, ownerHash, cipherText, completed, analytics }
+   action=submit（回答の保存。「入力完了」操作、および
+   「編集する」による未完了への差し戻し、両方をこれで扱う）
+   body: { ownerHash, cipherText, completed, analytics }
+   ※ pairKeyHashはクライアントから受け取らない。必ずPartnersへの
+     問い合わせ結果から自分で導出する（なりすまし防止）。
    ------------------------------------------------------------ */
 function handleSubmit(body) {
-  var pairKeyHash = body.pairKeyHash;
-  var ownerHash   = body.ownerHash;
-  var cipherText  = body.cipherText;
-  var completed   = !!body.completed;
-  var analytics   = body.analytics || {};
+  var ownerHash  = body.ownerHash;
+  var cipherText = body.cipherText;
+  var completed  = !!body.completed;
+  var analytics  = body.analytics || {};
 
-  if (!pairKeyHash || !ownerHash || !cipherText) {
+  if (!ownerHash || !cipherText) {
     return jsonResponse({ ok: false, reason: 'invalid_params' });
   }
 
-  var check = validatePairKeyHashForOwner(pairKeyHash, ownerHash);
-  if (!check.ok) return jsonResponse({ ok: false, reason: check.reason });
+  var resolved = resolvePartner(ownerHash);
+  var reason = partnerReason(resolved);
+  if (reason) return jsonResponse({ ok: false, reason: reason });
+
+  var pairKeyHash = sha256HexGS('lookup:' + resolved.pairKey);
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -203,8 +220,6 @@ function handleSubmit(body) {
     if (rowIndex) {
       createdAt = sheet.getRange(rowIndex, COL.CREATED_AT).getValue() || now;
       if (completed) {
-        // すでに一度入力完了していた場合は、その最初のcompletedAtは
-        // 上書きせず、今回新たに完了した場合のみ現在時刻にする
         var prevCompleted = sheet.getRange(rowIndex, COL.COMPLETED).getValue();
         var prevCompletedAt = sheet.getRange(rowIndex, COL.COMPLETED_AT).getValue();
         completedAt = (prevCompleted && prevCompletedAt) ? prevCompletedAt : now;
@@ -247,23 +262,31 @@ function upsertAnalyticsRow(sheet, pairKeyHash, ownerHash, completed, analytics,
 
 
 /* ------------------------------------------------------------
-   action=fetchPair（自分の回答状況＋相手の回答状況を取得）
-   ・自分の回答は completed に関わらず常に返す（下書き復元用ではなく、
-     他端末からでも自分の最新の入力完了内容を確認できるようにするため）
+   action=fetchPair（現在のパートナー情報＋暗号鍵材料＋
+   自分の回答状況＋相手の回答状況を、一度にまとめて返す）
+   ・自分の回答は completed に関わらず常に返す
    ・相手の回答は completed === true の場合のみ cipherText を含める
+   ・pairKey（暗号鍵材料の生値）はここで初めてクライアントに渡る。
+     ユーザーが目にすることはなく、ブラウザのメモリ上でAES鍵の
+     導出にのみ使われる想定。
    ------------------------------------------------------------ */
-function handleFetchPair(pairKeyHash, ownerHash) {
-  if (!pairKeyHash || !ownerHash) return jsonResponse({ ok: false, reason: 'invalid_params' });
+function handleFetchPair(ownerHash) {
+  if (!ownerHash) return jsonResponse({ ok: false, reason: 'invalid_params' });
 
-  var check = validatePairKeyHashForOwner(pairKeyHash, ownerHash);
-  if (!check.ok) return jsonResponse({ ok: false, reason: check.reason });
+  var resolved = resolvePartner(ownerHash);
+  var reason = partnerReason(resolved);
+  if (reason) return jsonResponse({ ok: false, reason: reason });
+
+  var pairKeyHash = sha256HexGS('lookup:' + resolved.pairKey);
 
   var sheet = getSheet();
   var own = readAnswerRow(sheet, pairKeyHash, ownerHash);
-  var partner = readAnswerRow(sheet, pairKeyHash, check.partnerHash);
+  var partner = readAnswerRow(sheet, pairKeyHash, resolved.partnerHash);
 
   return jsonResponse({
     ok: true,
+    pairKey: resolved.pairKey,
+    partnerHash: resolved.partnerHash,
     own: own
       ? { cipherText: own.cipherText, completed: own.completed, updatedAt: own.updatedAt }
       : null,
