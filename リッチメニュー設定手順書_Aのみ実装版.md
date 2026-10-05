@@ -40,7 +40,7 @@ https://api.line.me/v2/bot/richmenu
 
 | Key | Value |
 |---|---|
-| Authorization | Bearer {channel access token} |
+| Authorization | Bearer ENtYB0RGByLBTBSPscYjWTb28s7ikNN5md1E9uqwYtUEx/FP4O4oF/gmzNlrMWbWSzohN/6Etf0+mMnCw8LnY3I1JjqMq8sfb71dRA8YSn2ZQx6Kqw/Dm1YX8JyX4xXebFVgYrBiHmibNVPNt5mGkgdB04t89/1O/w1cDnyilFU= |
 | Content-Type | application/json |
 
 - Body（raw / JSON）：
@@ -54,23 +54,23 @@ https://api.line.me/v2/bot/richmenu
     "areas": [
         {
             "bounds": { "x": 0, "y": 223, "width": 836, "height": 998 },
-            "action": { "type": "uri", "uri": "https://miniapp.line.me/{自己開示Part1のliffId}" }
+            "action": { "type": "uri", "uri": "https://liff.line.me/2010312230-hylUrwot" }
         },
         {
             "bounds": { "x": 836, "y": 223, "width": 827, "height": 998 },
-            "action": { "type": "uri", "uri": "https://miniapp.line.me/{自己開示Part2のliffId}" }
+            "action": { "type": "uri", "uri": "https://liff.line.me/2010312230-4V3s95nz" }
         },
         {
             "bounds": { "x": 1663, "y": 223, "width": 837, "height": 998 },
-            "action": { "type": "uri", "uri": "https://miniapp.line.me/{自己開示Part3のliffId}" }
+            "action": { "type": "uri", "uri": "https://liff.line.me/2010312230-bMhTf6he" }
         },
         {
             "bounds": { "x": 0, "y": 1221, "width": 1250, "height": 465 },
-            "action": { "type": "uri", "uri": "https://miniapp.line.me/{婚活プロフィールのliffId}" }
+            "action": { "type": "uri", "uri": "https://liff.line.me/2010312230-3gcd1xq6" }
         },
         {
             "bounds": { "x": 1250, "y": 1221, "width": 1250, "height": 465 },
-            "action": { "type": "uri", "uri": "https://miniapp.line.me/{価値観すり合わせのliffId}" }
+            "action": { "type": "uri", "uri": "https://liff.line.me/2010312230-eMR5533o" }
         }
     ]
 }
@@ -102,7 +102,7 @@ https://api-data.line.me/v2/bot/richmenu/{richMenuId_A}/content
 
 | Key | Value |
 |---|---|
-| Authorization | Bearer {channel access token} |
+| Authorization | Bearer ENtYB0RGByLBTBSPscYjWTb28s7ikNN5md1E9uqwYtUEx/FP4O4oF/gmzNlrMWbWSzohN/6Etf0+mMnCw8LnY3I1JjqMq8sfb71dRA8YSn2ZQx6Kqw/Dm1YX8JyX4xXebFVgYrBiHmibNVPNt5mGkgdB04t89/1O/w1cDnyilFU= |
 | Content-Type | image/jpeg |
 
 - Body：「binary」を選択し、`richmenu-pre.jpg` を選択
@@ -127,7 +127,7 @@ https://api.line.me/v2/bot/user/all/richmenu/{richMenuId_A}
 
 | Key | Value |
 |---|---|
-| Authorization | Bearer {channel access token} |
+| Authorization | Bearer ENtYB0RGByLBTBSPscYjWTb28s7ikNN5md1E9uqwYtUEx/FP4O4oF/gmzNlrMWbWSzohN/6Etf0+mMnCw8LnY3I1JjqMq8sfb71dRA8YSn2ZQx6Kqw/Dm1YX8JyX4xXebFVgYrBiHmibNVPNt5mGkgdB04t89/1O/w1cDnyilFU= |
 
 - Body：なし（「none」を選択）
 
