@@ -229,7 +229,7 @@
 
     <div id="errorBanner" class="error-banner hidden"></div>
 
-    <!-- 未登録：これから真剣交際に進む -->
+    <!-- 未登録：パートナー登録 -->
     <div id="screen-intro" class="card hidden">
       <p class="lead">
         お相手を一人だけ登録できます。<br>
@@ -237,7 +237,7 @@
       </p>
       <label class="field-label" for="introDisplayName">お相手に表示する名前（任意）</label>
       <input type="text" id="introDisplayName" placeholder="例）ゆか、たろう など" maxlength="20">
-      <button class="btn btn-primary" id="startBtn">真剣交際に進む</button>
+      <button class="btn btn-primary" id="startBtn">パートナーを登録する</button>
     </div>
 
     <!-- 招待送信済み：相手の確認待ち -->
@@ -257,13 +257,13 @@
       <p class="lead center" id="inviteFromText"></p>
       <label class="field-label" for="confirmDisplayName">相手に表示する名前（任意）</label>
       <input type="text" id="confirmDisplayName" placeholder="例）ゆか、たろう など" maxlength="20">
-      <button class="btn btn-primary" id="confirmBtn">真剣交際を承認する</button>
+      <button class="btn btn-primary" id="confirmBtn">パートナーを登録する</button>
       <p class="notice">承認すると、あなたとお相手が過去に共有した自己開示・婚活プロフィール・すり合わせの内容が、お互いだけに見える状態になります。</p>
     </div>
 
     <!-- 交際中 -->
     <div id="screen-active" class="card hidden">
-      <div class="center"><span class="status-pill dot">真剣交際中</span></div>
+      <div class="center"><span class="status-pill dot">交際中</span></div>
       <p class="lead center">
         お相手：<span class="name-highlight" id="activePartnerName">—</span>
       </p>
@@ -278,12 +278,12 @@
     <div id="screen-ended" class="card hidden">
       <div class="center"><span class="status-pill dot">現在パートナーはいません</span></div>
       <p class="lead center muted">
-        以前のお相手（<span id="endedPartnerName">—</span>）との真剣交際は終了しています。<br>
+        以前のお相手（<span id="endedPartnerName">—</span>）との交際は終了しています。<br>
         これまでの共有内容は、お相手を含め本人以外どなたにも表示されません。
       </p>
       <label class="field-label" for="restartDisplayName">お相手に表示する名前（任意）</label>
       <input type="text" id="restartDisplayName" placeholder="例）ゆか、たろう など" maxlength="20">
-      <button class="btn btn-primary" id="restartBtn">新しく真剣交際に進む</button>
+      <button class="btn btn-primary" id="restartBtn">新しくパートナーを登録する</button>
     </div>
 
   </div>
