@@ -1,0 +1,358 @@
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  padding:20px 12px 34px;
+  background:#fff6f7;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Hiragino Sans",
+    "Yu Gothic",
+    sans-serif;
+  color:#444;
+}
+
+.container{
+  max-width:700px;
+  margin:0 auto;
+}
+
+/********************************
+ * ヘッダー
+ ********************************/
+
+.form-header{
+  background:#ffffff;
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.08);
+  margin-bottom:24px;
+}
+
+.form-header::before{
+  content:"";
+  display:block;
+  width:100%;
+  height:180px;
+  background-image:url("header.webp");
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+}
+
+.form-header h1{
+  margin:24px 24px 12px;
+  font-size:32px;
+  font-weight:700;
+  color:#d96c7d;
+}
+
+.form-description{
+  margin:0 24px 24px;
+  font-size:14px;
+  line-height:1.9;
+  color:#666;
+}
+
+/********************************
+ * 質問カード
+ ********************************/
+
+label{
+  display:block;
+  margin-top:24px;
+  margin-bottom:8px;
+  font-size:15px;
+  font-weight:600;
+  line-height:1.7;
+}
+
+input[type="text"],
+input[type="time"],
+textarea{
+  width:100%;
+  padding:14px;
+  border:1px solid #f0c5cc;
+  border-radius:12px;
+  background:#fff;
+  font-size:15px;
+}
+
+textarea{
+  min-height:120px;
+  resize:vertical;
+}
+
+#q3Detail,
+#q6Detail{
+  margin:8px 0 8px 24px;
+  width:calc(100% - 24px);
+}
+
+/********************************
+ * ラジオ
+ ********************************/
+
+input[type="radio"]{
+  margin-right:8px;
+}
+
+label:has(input[type="radio"]){
+  font-weight:400;
+  margin-top:8px;
+}
+
+/********************************
+ * スライダー
+ ********************************/
+
+.slider-labels{
+  display:flex;
+  justify-content:space-between;
+  margin-top:8px;
+  margin-bottom:8px;
+  color:#d96c7d;
+  font-weight:600;
+}
+
+input[type="range"]{
+  width:100%;
+  accent-color:#f48ca0;
+}
+
+/********************************
+ * ボタン
+ ********************************/
+
+.button-group{
+  margin-top:40px;
+}
+
+/* 送信 */
+#submitBtn{
+  width:100%;
+  padding:18px;
+  border:none;
+  border-radius:14px;
+  background:#f48ca0;
+  color:#fff;
+  font-size:18px;
+  font-weight:700;
+  cursor:pointer;
+  box-shadow:
+    0 4px 12px rgba(244,140,160,.35);
+}
+
+#submitBtn:hover{
+  opacity:.95;
+}
+
+#submitBtn:disabled{
+  opacity:.6;
+  cursor:default;
+}
+
+/* 下段ボタン */
+.sub-buttons{
+  display:flex;
+  gap:12px;
+  margin-top:12px;
+}
+
+/* 共通 */
+.sub-buttons button{
+  flex:1;
+  border-radius:12px;
+  font-weight:600;
+  cursor:pointer;
+  transition:.2s;
+}
+
+/* 下書き保存 */
+#draftBtn{
+  padding:14px;
+  background:#fff;
+  color:#d96c7d;
+  border:2px solid #f0c5cc;
+  font-size:15px;
+}
+
+/* フォームクリア */
+#clearBtn{
+  padding:14px;
+  background:#fafafa;
+  color:#888;
+  border:1px solid #dddddd;
+  font-size:15px;
+}
+
+#draftBtn:hover{
+  background:#fff6f7;
+}
+
+#clearBtn:hover{
+  background:#f0f0f0;
+}
+
+/********************************
+ * モーダル
+ ********************************/
+
+.modal{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.45);
+  justify-content:center;
+  align-items:center;
+  padding:20px;
+  z-index:999;
+}
+
+.modal.show{
+  display:flex;
+}
+
+.modal-content{
+  width:100%;
+  max-width:400px;
+  background:#fff;
+  border-radius:20px;
+  padding:24px;
+  box-shadow:
+    0 8px 24px rgba(0,0,0,.15);
+}
+
+.modal-content h3{
+  margin-top:0;
+  text-align:center;
+  color:#d96c7d;
+}
+
+#shareName{
+  width:100%;
+  margin-top:12px;
+}
+
+#shareBtn{
+  width:100%;
+  margin-top:16px;
+  padding:14px;
+  border:none;
+  border-radius:12px;
+  background:#f48ca0;
+  color:#fff;
+  font-size:16px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.share-confirm-card{
+  margin-top:0;
+  margin-bottom:12px;
+}
+
+/********************************
+ * セーフエリア（LINEミニアプリ・横向きモード）
+ ********************************/
+
+@media (orientation:landscape){
+  body{
+    padding-left:44px;
+    padding-right:44px;
+    padding-bottom:21px;
+  }
+}
+
+/********************************
+ * スマホ最適化
+ ********************************/
+
+@media (max-width:600px){
+
+  .form-header::before{
+    height:140px;
+  }
+
+  .form-header h1{
+    font-size:28px;
+  }
+
+  .form-description{
+    font-size:13px;
+  }
+}
+
+/********************************
+ * 状態表示（共有リンク読み込み中・エラー時）
+ ********************************/
+
+.state-card{
+  text-align:center;
+}
+
+.state-text{
+  margin:0;
+  font-size:14px;
+  line-height:1.8;
+  color:#666;
+}
+
+.state-spinner{
+  width:30px;
+  height:30px;
+  margin:0 auto 12px;
+}
+
+.state-spinner img{
+  width:30px;
+  height:30px;
+  display:none;
+}
+
+.state-spinner .spinner-light{
+  display:block;
+}
+
+@media (prefers-color-scheme: dark){
+  .state-spinner .spinner-light{ display:none; }
+  .state-spinner .spinner-dark{ display:block; }
+}
+
+.detail-textarea{
+  width:100%;
+  min-height:20px;
+  padding:14px;
+  border:1px solid #f0c5cc;
+  border-radius:16px;
+  background:#fff;
+  font-size:15px;
+  resize:none;
+  margin:8px 0 12px 0;
+}
+
+/********************************
+ * スクショ抑止用ウォーターマーク
+ * ・共有リンクを開いた閲覧者の画面にのみ重ねて表示する
+ * ・position:fixedのためスクロールしても常に画面上に留まり、
+ *   端末でスクショを撮ってもウォーターマークごと写り込む
+ * ・pointer-eventsはnoneにして操作の邪魔をしないようにする
+ ********************************/
+
+#screenshotWatermark{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  pointer-events:none;
+  background-repeat:repeat;
+  background-position:top left;
+}
+
+#screenshotWatermark.show{
+  display:block;
+}
