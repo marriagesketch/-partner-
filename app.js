@@ -105,12 +105,12 @@ function confirmSheet(title, body, confirmLabel){
 async function shareInviteLink(inviteURL){
   const ok = await confirmSheet(
     "お相手を選んで送信",
-    "真剣交際のお相手お一人を選んで送信します。一度送信すると、そのリンクを開いた最初の方がお相手として登録されます。",
+    "お相手お一人を選んで送信します。一度送信すると、そのリンクを開いた最初の方がお相手として登録されます。",
     "相手を選んで送信する"
   );
   if(!ok) return false;
 
-  const previewMsg = `真剣交際のお誘いが届きました。\n${inviteURL}`;
+  const previewMsg = `パートナー登録のお誘いが届きました。\n${inviteURL}`;
   if(liff.isApiAvailable("shareTargetPicker")){
     try{
       await liff.shareTargetPicker([{ type:"text", text: previewMsg }], { isMultiple: false });
@@ -138,7 +138,7 @@ async function copyToClipboard(text){
    ============================================================ */
 function renderNone(){
   setRingsState("none");
-  document.getElementById("pageTitle").textContent = "真剣交際の登録";
+  document.getElementById("pageTitle").textContent = "パートナー登録";
   showOnly("screen-intro");
 }
 function renderPending(inviteToken){
@@ -163,7 +163,7 @@ function renderPending(inviteToken){
 }
 function renderActive(partnerDisplayName, startedAt){
   setRingsState("active");
-  document.getElementById("pageTitle").textContent = "真剣交際中";
+  document.getElementById("pageTitle").textContent = "交際中";
   document.getElementById("activePartnerName").textContent = partnerDisplayName || "（お相手）";
   document.getElementById("activeStartedAt").textContent = formatDate(startedAt);
   showOnly("screen-active");
@@ -182,7 +182,7 @@ function renderActive(partnerDisplayName, startedAt){
 }
 function renderEnded(partnerDisplayName){
   setRingsState("ended");
-  document.getElementById("pageTitle").textContent = "真剣交際の登録";
+  document.getElementById("pageTitle").textContent = "パートナー登録";
   document.getElementById("endedPartnerName").textContent = partnerDisplayName || "—";
   showOnly("screen-ended");
   bindStartHandler("restartBtn", "restartDisplayName");
@@ -215,11 +215,11 @@ function bindStartHandler(buttonId, inputId){
 
 function reasonToMessage(reason){
   switch(reason){
-    case "already_active":  return "すでに真剣交際が登録されています。";
+    case "already_active":  return "すでにパートナーが登録されています。";
     case "already_pending": return "すでに招待を送信済みです。相手の確認をお待ちください。";
     case "cannot_partner_self": return "自分自身を相手として登録することはできません。";
     case "invalid_or_expired_token": return "この招待リンクは無効か、有効期限が切れています。";
-    case "no_active_partnership": return "現在、真剣交際中のお相手が登録されていません。";
+    case "no_active_partnership": return "現在、交際中のお相手が登録されていません。";
     case "no_pending_invite": return "取り消せる招待が見つかりませんでした。";
     default: return "処理に失敗しました。時間をおいて再度お試しください。";
   }
@@ -230,15 +230,15 @@ function reasonToMessage(reason){
    ============================================================ */
 async function renderConfirmScreen(inviteToken){
   setRingsState("pending");
-  document.getElementById("pageTitle").textContent = "真剣交際のお誘い";
+  document.getElementById("pageTitle").textContent = "パートナー登録のお誘い";
   showOnly("screen-confirm");
 
   const info = await apiGet({ action:"inviteInfo", token: inviteToken });
   const fromText = document.getElementById("inviteFromText");
   if(info.ok){
     fromText.innerHTML = info.inviterDisplayName
-      ? `<span class="name-highlight">${escapeHTML(info.inviterDisplayName)}</span>さんから、真剣交際のお誘いが届いています。`
-      : "真剣交際のお誘いが届いています。";
+      ? `<span class="name-highlight">${escapeHTML(info.inviterDisplayName)}</span>さんから、パートナー登録のお誘いが届いています。`
+      : "パートナー登録のお誘いが届いています。";
   }else{
     showError(reasonToMessage(info.reason));
     fromText.textContent = "";
@@ -257,7 +257,7 @@ async function renderConfirmScreen(inviteToken){
         return;
       }
       try{ sessionStorage.removeItem(PENDING_TOKEN_KEY); }catch(_){}
-      showToast("真剣交際を登録しました");
+      showToast("パートナーを登録しました");
       renderActive(result.partnerDisplayName, new Date().toISOString());
     }catch(e){
       console.error(e);
