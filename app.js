@@ -101,8 +101,66 @@ function confirmSheet(title, body, confirmLabel){
   });
 }
 
-/* ---- 招待リンクを1人だけに送る（shareTargetPicker）。失敗時はコピーに誘導 ---- */
-async function shareInviteLink(inviteURL){
+/* ------------------------------------------------------------
+   招待メッセージ：シェアターゲットピッカー用 Flexメッセージ
+   （自己開示QAの共有メッセージと同じ構成：
+     ヒーロー画像＋ブランドラベル＋タイトル＋説明＋プライマリボタン）
+   ・ヒーロー画像は、このページと同じフォルダに置いた
+     sharetargetpicker.jpg（3:2）を自動で参照する。
+     別の場所に置く場合は、下の定数を絶対URL(https)に書き換える。
+   ------------------------------------------------------------ */
+const SHARETARGETPICKER_IMAGE_URL = new URL("sharetargetpicker.jpg", location.href).href;
+
+function buildInviteFlexMessage(inviterName, inviteURL){
+  const title = inviterName
+    ? `${inviterName}さんからパートナー登録のお誘いが届きました`
+    : "パートナー登録のお誘いが届きました";
+
+  return {
+    type: "flex",
+    altText: `パートナー登録 - ${title}`,
+    contents: {
+      type: "bubble",
+      hero: {
+        type: "image",
+        url: SHARETARGETPICKER_IMAGE_URL,
+        size: "full",
+        aspectRatio: "3:2",
+        aspectMode: "cover"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "md",
+        paddingAll: "20px",
+        contents: [
+          { type: "text", text: "パートナー登録", size: "xs", weight: "bold", color: "#d96c7d" },
+          { type: "text", text: title, size: "lg", weight: "bold", wrap: true, margin: "sm" },
+          { type: "text", text: "ボタンから内容を確認して、パートナー登録を進めてください。", size: "sm", color: "#888888", wrap: true, margin: "md" },
+          { type: "text", text: "登録が完了すると、これまで共有した自己開示などの内容は、お二人だけが閲覧できるようになります。", size: "xs", color: "#aaaaaa", wrap: true, margin: "md" }
+        ]
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        paddingAll: "20px",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            height: "sm",
+            color: "#f48ca0",
+            action: { type: "uri", label: "招待を確認する", uri: inviteURL }
+          }
+        ]
+      }
+    }
+  };
+}
+
+/* ---- 招待リンクを1人だけに送る（shareTargetPicker）。失敗時はテキストでのLINE共有に切り替える ---- */
+async function shareInviteLink(inviteURL, inviterName){
   const ok = await confirmSheet(
     "お相手を選んで送信",
     "お相手お一人を選んで送信します。一度送信すると、そのリンクを開いた最初の方がお相手として登録されます。",
@@ -110,15 +168,21 @@ async function shareInviteLink(inviteURL){
   );
   if(!ok) return false;
 
-  const previewMsg = `パートナー登録のお誘いが届きました。\n${inviteURL}`;
+  const flexMessage = buildInviteFlexMessage(inviterName, inviteURL);
+
   if(liff.isApiAvailable("shareTargetPicker")){
     try{
-      await liff.shareTargetPicker([{ type:"text", text: previewMsg }], { isMultiple: false });
+      await liff.shareTargetPicker([flexMessage], { isMultiple: false });
       return true;
     }catch(e){
-      console.warn("shareTargetPicker failed:", e);
+      console.warn("shareTargetPicker failed, falling back to URL scheme:", e);
     }
   }
+
+  // shareTargetPickerが使えない環境向けのフォールバック（こちらは通常のテキスト）
+  const previewMsg = inviterName
+    ? `${inviterName}さんからパートナー登録のお誘いが届きました。\n招待を確認する→${inviteURL}`
+    : `パートナー登録のお誘いが届きました。\n招待を確認する→${inviteURL}`;
   const lineURL = `https://line.me/R/msg/text/?${encodeURIComponent(previewMsg)}`;
   if(liff.isInClient()){ window.location.href = lineURL; } else { window.open(lineURL, "_blank"); }
   return true;
@@ -145,9 +209,24 @@ function renderPending(inviteToken){
   setRingsState("pending");
   document.getElementById("pageTitle").textContent = "確認待ちです";
   showOnly("screen-pending");
-  document.getElementById("resendBtn").onclick = async () => {
-    const url = getFormBaseURL() + "?token=" + encodeURIComponent(inviteToken);
-    await shareInviteLink(url);
+  document.getElementById("resendBtn").onclick = async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try{
+      const url = getFormBaseURL() + "?token=" + encodeURIComponent(inviteToken);
+      // 画面を開き直した場合でも、登録時に入力した名前をメッセージに入れられるよう、
+      // サーバー（inviteInfo）から招待者名を取り直す
+      let inviterName = "";
+      try{
+        const info = await apiGet({ action:"inviteInfo", token: inviteToken });
+        if(info.ok) inviterName = info.inviterDisplayName || "";
+      }catch(e){
+        console.warn("inviteInfo fetch failed (名前なしで送信します):", e);
+      }
+      await shareInviteLink(url, inviterName);
+    }finally{
+      btn.disabled = false;
+    }
   };
   document.getElementById("copyPendingBtn").onclick = () => {
     copyToClipboard(getFormBaseURL() + "?token=" + encodeURIComponent(inviteToken));
@@ -202,7 +281,7 @@ function bindStartHandler(buttonId, inputId){
         return;
       }
       const url = getFormBaseURL() + "?token=" + encodeURIComponent(result.inviteToken);
-      await shareInviteLink(url);
+      await shareInviteLink(url, displayName);
       renderPending(result.inviteToken);
     }catch(e){
       console.error(e);
