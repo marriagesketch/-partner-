@@ -25,6 +25,41 @@ function getLineUserId() {
   return idToken.sub;
 }
 
+/* ---- LINEの表示名を、名前入力欄の初期値として使う ----
+   ・画面表示のためだけにブラウザ内で読み取り、入力欄に入れるだけ。
+     サーバーに送られるのは、ユーザーが確認・編集して登録ボタンを押した
+     ときの入力欄の値だけ（これまでと同じ）。
+   ・LINEのプロフィールを取得できない場合（LIFFのprofileスコープが
+     無効など）は、これまで通り空欄のまま（プレースホルダー表示）。 */
+const DISPLAY_NAME_MAX = 20; // 入力欄のmaxlengthと合わせる
+
+async function getLineDisplayName(){
+  // ① IDトークンのnameクレーム（通信不要）
+  try{
+    const t = liff.getDecodedIDToken();
+    if(t && t.name) return String(t.name);
+  }catch(_){}
+  // ② なければ liff.getProfile()
+  try{
+    const p = await liff.getProfile();
+    if(p && p.displayName) return String(p.displayName);
+  }catch(e){
+    console.warn("LINE表示名の取得をスキップ:", e);
+  }
+  return "";
+}
+
+async function prefillDisplayNames(){
+  let name = (await getLineDisplayName()).trim();
+  if(!name) return;
+  name = Array.from(name).slice(0, DISPLAY_NAME_MAX).join("");
+  ["introDisplayName", "confirmDisplayName", "restartDisplayName"].forEach(id => {
+    const el = document.getElementById(id);
+    // すでに入力されている値（ユーザーが先に打ち始めた場合など）は上書きしない
+    if(el && !el.value) el.value = name;
+  });
+}
+
 async function checkFriendship(){
   try{
     const friendship = await liff.getFriendship();
@@ -422,6 +457,10 @@ async function loadStatus(){
   if(!liff.isLoggedIn()){ liff.login(); return; }
 
   await checkFriendship();
+
+  // 名前入力欄（登録・承認・再登録の3か所）にLINEの表示名を初期入力する。
+  // 画面の表示を待たせないよう await せずに実行し、入力欄が空のときだけ埋める。
+  prefillDisplayNames();
 
   if(inviteToken){
     await renderConfirmScreen(inviteToken);
